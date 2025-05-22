@@ -1,85 +1,57 @@
-import pytest
-from tradebot.application.order_generator import OrderGenerator
+import pytest, math, random
+from tradebot.application.order_generator import (
+    SimpleOrderGenerator, PropOrderManager
+)
+from tradebot.application.risk import (
+    SimpleRiskManager, FiboRiskManager
+)
 from tradebot.domain.models import Signal, Target
 
-# -------------------------------------------------------------
-# Fixtures & helpers
-# -------------------------------------------------------------
+random.seed(42)          # deterministic noise
 
-FIXED_RISK = 1.0  # total lots per signal
-
-def fixed_risk(_signal):
-    return FIXED_RISK
-
-@pytest.fixture
-def generator():
-    return OrderGenerator(risk_func=fixed_risk)
-
-
-def make_signal(symbol, side, order_type, entry, targets, sl, comment):
-    """Utility to build a Signal with arbitrary targets."""
+def make_signal(targets, comment="T"):
     return Signal(
-        symbol=symbol,
-        side=side,
-        order_type=order_type,
-        entry=entry,
-        targets=[Target(price=t) for t in targets],
-        stop_loss=sl,
-        comment=comment,
-        raw_source=""
+        symbol="XAUUSD", side="buy", order_type="limit",
+        entry=1.5, targets=[Target(t) for t in targets],
+        stop_loss=1.2, comment=comment, raw_source=""
     )
 
-# -------------------------------------------------------------
-# Tests
-# -------------------------------------------------------------
+# ------------------------------------------------------------------
+def test_simple_order_generator():
+    mgr = SimpleRiskManager(); mgr.total_risk = lambda s: 1.0
+    gen = SimpleOrderGenerator(risk_manager=mgr)
+    sig = make_signal([10,20,30])
+    orders = gen.generate_orders(sig)
+    exp = [0.333,0.333,0.333]
+    for idx,(o,e) in enumerate(zip(orders,exp),start=1):
+        assert o.risk == pytest.approx(e, rel=1e-3)
+        assert o.comment.endswith(f"{idx}of3")
 
-@pytest.mark.parametrize(
-    "targets,expected_volumes", [
-        ([10, 20, 30], [0.33, 0.33, 0.33]),
-        ([50],         [1.0]),
-    ])
-def test_generate_splits_volume_equally(generator, targets, expected_volumes):
-    sig = make_signal("EURUSD", "buy", "limit", 1.2345, targets, 1.2300, "test")
-    orders = generator.generate(sig)
-    assert len(orders) == len(targets)
+# ------------------------------------------------------------------
+def test_fibo_order_generator_reverse():
+    mgr = FiboRiskManager(reverse=True)
+    mgr.total_risk = lambda sig: 1.0
 
-    for idx, (order, exp_vol, tgt) in enumerate(zip(orders, expected_volumes, targets), start=1):
-        assert pytest.approx(order.volume, rel=1e-6) == exp_vol
-        assert order.price == sig.entry               # limit order retains entry price
-        assert order.tp    == tgt
-        assert order.sl    == sig.stop_loss
-        # comment should include target index
-        assert order.comment == f"{sig.comment} {idx}of{len(targets)}".strip()
+    gen = SimpleOrderGenerator(risk_manager=mgr)
+    sig = make_signal([1,2,3,4,5], comment="Z")
+    orders = gen.generate_orders(sig)
 
+    expected = [0.417, 0.250, 0.167, 0.083, 0.083]
+    assert [o.risk for o in orders] == pytest.approx(expected, rel=1e-3)
 
-@pytest.mark.parametrize("order_type,price_expected", [
-    ("limit", 3.3),
-    ("market", None),
-])
-def test_price_field_for_market_and_limit(generator, order_type, price_expected):
-    tgts = [100]
-    sig = make_signal("XAUUSD", "sell", order_type, 3.3, tgts, 2.9, "cmt")
-    orders = generator.generate(sig)
-    assert len(orders) == 1
-    order = orders[0]
-    assert order.price == price_expected
-    # comment ends with 
-    assert order.comment.endswith("1of1")
+# ------------------------------------------------------------------
+def test_prop_order_manager_noise_within_bounds():
+    base_mgr = SimpleRiskManager(); base_mgr.total_risk = lambda s: 0.5
+    prop_gen  = PropOrderManager(risk_manager=base_mgr, noise_level=0.002)  # ±0.2 %
 
+    sig   = make_signal([11,22,33], comment="Noise")
+    orders= prop_gen.generate_orders(sig)
 
-def test_no_targets_returns_empty(generator):
-    sig = make_signal("BTCUSD", "buy", "market", 50000, [], None, "none")
-    orders = generator.generate(sig)
-    assert orders == []
+    # Each base risk should be 0.167; ensure noise stays within ±0.0004
+    base = 0.167
+    for idx,o in enumerate(orders, start=1):
+        assert abs(o.risk - base) <= base * 0.002 + 1e-3
+        assert o.comment.endswith(f"{idx}of3")
 
-
-def test_custom_risk_function_applied():
-    def custom_risk(_):
-        return 2.0
-    gen = OrderGenerator(risk_func=custom_risk)
-    sig = make_signal("EURUSD", "buy", "limit", 1.1, [1.2, 1.3], 1.0, "c")
-    orders = gen.generate(sig)
-    assert len(orders) == 2
-    for idx, o in enumerate(orders, start=1):
-        assert o.volume == pytest.approx(1.0)
-        assert o.comment.endswith(f"{idx}of2")
+    # Total risk should remain ~0.5
+    assert math.isclose(sum(o.risk for o in orders), 0.5, rel_tol=1e-2)

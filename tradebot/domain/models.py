@@ -12,11 +12,12 @@ class Order:
     """Concrete order to send to trading engine."""
     symbol: str           # e.g., "XAUUSD"
     side: str             # 'buy' or 'sell'
-    volume: float         # in lots
-    price: float | None  # entry price for limit, None if market
-    sl: float | None     # stop loss price or None
-    tp: float | None     # take profit price or None
-    comment: str            # free-text comment extracted from signal
+    order_type: str       # 'limit' or 'market'
+    risk: float           # in percent (risk to equity)
+    price: float | None   # entry price for limit, None if market
+    sl: float | None      # stop loss price or None
+    tp: float | None      # take profit price or None
+    comment: str          # free-text comment extracted from signal
 
 @dataclass(frozen=True)
 class Signal:
@@ -35,4 +36,4 @@ class OrderResult:
     """Result of sending an order."""
     success: bool
     message: str
-    data: dict | None
+    data: dict | None = None
