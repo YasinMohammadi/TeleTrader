@@ -4,24 +4,21 @@ import MetaTrader5 as mt5
 from loguru import logger
 from tradebot.domain.models import Order, OrderResult
 from tradebot.domain.ports import TradingEnginePort
+from ._mt5_symbol_resolver import SymbolResolver
+from ._magic import MagicGen
 from config import settings
+
+from ._mt5_utils import ensure_mt5
 
 class MetaTraderEngine(TradingEnginePort):
     def __init__(self):
-        if not mt5.initialize(settings.mt5_path):
-            logger.info("Couldn't Initailize MT5 Terminal")
-            mt5.shutdown()
-            raise RuntimeError(mt5.last_error())
-        if not mt5.login(settings.mt_account,
-                         password=settings.mt_password,
-                         server=settings.mt_server):
-            raise RuntimeError(mt5.last_error())
-        logger.info("MT5 logged in OK.")
+        ensure_mt5()
+        self._resolver = SymbolResolver()
 
     # ------------------
     def execute_order(self, order: Order) -> OrderResult: 
                 
-        symbol_mt = f"{order.symbol}b"                             
+        symbol_mt = self._resolver.resolve(order.symbol)                            
         if not mt5.symbol_select(symbol_mt, True):
             return OrderResult(False, f"cannot select {symbol_mt}")
         
@@ -32,7 +29,7 @@ class MetaTraderEngine(TradingEnginePort):
 
         # ------ choose action + mt5_type + price ------
         if order.order_type == "limit":
-            mt5_type = mt5.ORDER_TYPE_BUY_LIMIT if order.side == "buy" else mt5.ORDER_TYPE_SELL_LIMIT
+            mt5_type = mt5.ORDER_TYPE_BUY_STOP_LIMIT if order.side == "buy" else mt5.ORDER_TYPE_SELL_STOP_LIMIT
             action   = mt5.TRADE_ACTION_PENDING
 
         else:  # market
@@ -50,7 +47,7 @@ class MetaTraderEngine(TradingEnginePort):
             sl         = order.sl or 0,
             tp         = order.tp or 0,
             deviation  = settings.max_slippage,
-            magic      = settings.magic_number,
+            magic      = MagicGen.generate(),
             comment    = order.comment[:30],      
             type_time  = mt5.ORDER_TIME_GTC,
             # type_filling = mt5.ORDER_FILLING_RETURN,

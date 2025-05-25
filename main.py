@@ -10,7 +10,7 @@ from tradebot.infrastructure.telegram_listener import TelegramSignalListener
 
 def bootstrap():
 
-    logger.add("tradebot.log", rotation="10 MB", level="INFO")
+    logger.add("tradebot.log", rotation="25 MB", level="DEBUG")
 
     parser           = BasicSignalParser()
     engine           = MetaTraderEngine()
