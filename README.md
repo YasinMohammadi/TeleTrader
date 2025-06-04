@@ -98,13 +98,13 @@ python -m main
 ```
 
 Keep the MT5 terminal **open and logged-in**.  
-Post a formatted signal into your channel – the bot will fill orders in seconds.
+Post a formatted signal into your channel - the bot will fill orders in seconds.
 
 ----------
 
 ## Signal format
 
--   **First line** → `SYMBOL – SIDE (LIMIT|NOW|MARKET)`  
+-   **First line** → `SYMBOL - SIDE (LIMIT|NOW|MARKET)`  
     _`BUY NOW` is treated as a market order._
     
 -   **Entry** → single price or range (`3210-3215`, lower bound used).
@@ -137,12 +137,12 @@ pytest -q
 
 ## Extending
 
--   **Indicator logic** – replace `risk.py` with ATR/volatility sizing.
+-   **Indicator logic** - replace `risk.py` with ATR/volatility sizing.
     
--   **Parser** – implement `AdvancedSignalParser` and swap via DI.
+-   **Parser** - implement `AdvancedSignalParser` and swap via DI.
     
--   **Broker engines** – add `TradingEnginePort` implementations for cTrader, Binance, etc.
+-   **Broker engines** - add `TradingEnginePort` implementations for cTrader, Binance, etc.
     
--   **Monitoring** – plug a watchdog that pings health to a dashboard.
+-   **Monitoring** - plug a watchdog that pings health to a dashboard.
     
 

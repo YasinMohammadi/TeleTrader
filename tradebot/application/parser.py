@@ -1,7 +1,7 @@
 # tradebot/application/parser.py
 
 """
-Pure‐python parser – no telegram dependency – easy to unit‐test.
+Pure‐python parser - no telegram dependency - easy to unit‐test.
 """
 import re
 from typing import Sequence, List

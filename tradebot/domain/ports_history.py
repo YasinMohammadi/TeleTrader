@@ -2,14 +2,10 @@
 from abc import ABC, abstractmethod
 import pandas as pd
 
-class TradeHistoryPort(ABC):
-    """Fetch executed trades into a tidy DataFrame."""
+class TradeDataPort(ABC):
+    """Provide raw MT5 deals and orders"""
 
     @abstractmethod
-    def fetch_positiosn(self) -> pd.DataFrame:
-        """
-        Return a DataFrame with at least:
-        ['time', 'symbol', 'side', 'volume', 'price_open',
-         'price_close', 'profit', 'comment']
-        The index should be UTC DatetimeIndex.
-        """
+    def fetch_deals(self) -> pd.DataFrame:  ...   # must include position_id
+    @abstractmethod
+    def fetch_orders(self) -> pd.DataFrame: ...   # must include position_id

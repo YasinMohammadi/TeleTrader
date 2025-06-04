@@ -5,6 +5,7 @@ from loguru import logger
 from config import settings       
 from tradebot.application.parser import BasicSignalParser
 from tradebot.application.order_generator import SimpleOrderGenerator
+from tradebot.application.risk import FiboRiskManager
 from tradebot.infrastructure.mt5_engine import MetaTraderEngine
 from tradebot.infrastructure.telegram_listener import TelegramSignalListener
 
@@ -14,7 +15,8 @@ def bootstrap():
 
     parser           = BasicSignalParser()
     engine           = MetaTraderEngine()
-    order_generator  = SimpleOrderGenerator()
+    risk_manager     = FiboRiskManager(reverse=True)
+    order_generator  = SimpleOrderGenerator(risk_manager=risk_manager)
 
     gateway          = TelegramSignalListener(
         parser,

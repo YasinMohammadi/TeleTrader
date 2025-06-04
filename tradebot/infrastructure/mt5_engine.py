@@ -23,21 +23,42 @@ class MetaTraderEngine(TradingEnginePort):
             return OrderResult(False, f"cannot select {symbol_mt}")
         
         # ----- lot size from risk pct -----
-        volume = self._calc_volume(order, symbol_mt)
+        volume = self._calc_volume(order)
         if volume <= 0:
             return OrderResult(False, "volume calc returned 0")
 
         # ------ choose action + mt5_type + price ------
+        bid, ask = self._current_prices(symbol_mt)
+
         if order.order_type == "limit":
-            mt5_type = mt5.ORDER_TYPE_BUY_STOP_LIMIT if order.side == "buy" else mt5.ORDER_TYPE_SELL_STOP_LIMIT
-            action   = mt5.TRADE_ACTION_PENDING
+            action = mt5.TRADE_ACTION_PENDING
 
-        else:  # market
-            mt5_type = mt5.ORDER_TYPE_BUY if order.side == "buy" else mt5.ORDER_TYPE_SELL
-            action   = mt5.TRADE_ACTION_DEAL
-            price    = self._current_price(order)
+            if order.side == "buy":
+                if order.price is not None and order.price <= ask:
+                    mt5_type = mt5.ORDER_TYPE_BUY_LIMIT
+                else:
+                    mt5_type = mt5.ORDER_TYPE_BUY_STOP
+            else:
+                # sell side
+                if order.price is not None and order.price >= bid:
+                    mt5_type = mt5.ORDER_TYPE_SELL_LIMIT
+                else:
+                    mt5_type = mt5.ORDER_TYPE_SELL_STOP
 
-        price = order.price or self._current_price(order)
+            price = order.price
+            if price is None:
+                price = ask if order.side == "buy" else bid
+
+        else:
+            
+            action  = mt5.TRADE_ACTION_DEAL
+            if order.side == "buy":
+                mt5_type = mt5.ORDER_TYPE_BUY
+                price    = ask
+            else:
+                mt5_type = mt5.ORDER_TYPE_SELL
+                price    = bid
+
         request = dict(
             action     = action,
             symbol     = symbol_mt,
@@ -64,19 +85,33 @@ class MetaTraderEngine(TradingEnginePort):
         logger.error(f"Order failed: {data} | last_error: {mt5.last_error()}")
         return OrderResult(False, "mt5 error", data=data)
     # ------------------
-    def _current_price(self, order: Order) -> float:
-        symbol_mt = f"{order.symbol}b"
+    def _current_order_price(self, order: Order) -> float:
+        """
+        Returns bid or ask in respect to order 
+        """
+        symbol_mt = self._resolver.resolve(order.symbol)
         tick = mt5.symbol_info_tick(symbol_mt)
         if not tick:
             raise RuntimeError(f"No tick for {symbol_mt}")
         return tick.ask if order.side == "buy" else tick.bid
     
+    def _current_prices(self, symbol_mt: str) -> tuple[float, float]:
+        """
+        Returns (bid, ask) price
+        """
+        tick = mt5.symbol_info_tick(symbol_mt)
+        if not tick:
+            raise RuntimeError(f"No tick for {symbol_mt}")
+        return tick.bid, tick.ask
+    
     # ------------------------------------------------------------------    
-    def _calc_volume(self, order: Order, symbol_mt: str) -> float:
+    def _calc_volume(self, order: Order) -> float:
         """
         Convert risk (percent of balance) into lots.
         volume = (risk_money) / (monetary_value_per_point * stop_distance_points)
         """
+
+        symbol_mt = self._resolver.resolve(order.symbol)
         acc = mt5.account_info()
         balance = acc.balance if acc else 0
         if balance == 0:
@@ -90,7 +125,7 @@ class MetaTraderEngine(TradingEnginePort):
 
         # Stop distance in points
         if order.sl:
-            stop_distance = abs((order.price or self._current_price(order)) - order.sl) / sym_info.point
+            stop_distance = abs((order.price or self._current_order_price(order)) - order.sl) / sym_info.point
         else:
             stop_distance = 0  
 
