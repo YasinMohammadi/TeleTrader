@@ -2,6 +2,7 @@
 
 notebooks
 tradebot\application\trade_dashboard.py
+accounts.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

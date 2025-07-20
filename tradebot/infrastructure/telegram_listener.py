@@ -14,6 +14,7 @@ from tradebot.domain.ports import (
     SignalParserPort, 
     TradingEnginePort,
     OrderPort,
+    NotificationPort,
 )
 from tradebot.domain.models import Order, OrderResult, Signal
 
@@ -25,11 +26,13 @@ class TelegramSignalListener:
             self,
             parser: SignalParserPort,
             engine: TradingEnginePort,
-            order_generator: OrderPort
+            order_generator: OrderPort,
+            notifier: NotificationPort
     ):
         self.parser = parser
         self.engine = engine
         self.generator = order_generator
+        self.notifier = notifier
 
         self.app = (ApplicationBuilder()
                     .token(settings.telegram_token)
@@ -57,10 +60,16 @@ class TelegramSignalListener:
 
         responses: list[str] = []
         for order in orders:
-            res: OrderResult = self.engine.execute_order(order)
-            logger.debug(f"Getting Order: {order}")
-            status = "OK" if res.success else "FAIL"
-            responses.append(f"{order.side.upper()} {order.risk} {order.symbol} -> TP {order.tp} : {status}")
+            results: list[OrderResult] = self.engine.execute_order(order)
+            logger.debug(f"Executing order: {order}")
+
+            for res in results:
+                status = "OK" if res.success else f"FAIL ({res.message})"
+                acc_id = res.data.get("account_id", "N/A") if res.data else "N/A"
+                responses.append(
+                    f"Acc {acc_id}: {order.side.upper()} {order.risk*100:.1f}% "
+                    f"{order.symbol} -> TP {order.tp} : {status}"
+                )
 
         await upd.effective_message.reply_text("\n".join(responses))
 
@@ -69,8 +78,24 @@ class TelegramSignalListener:
         logger.exception(f"Unhandled exception: {context.error}")
         if isinstance(update, Update) and update.effective_message:
             await update.effective_message.reply_text("Internal error _ see logs.")
+        # Notify admin channel of critical error
+        # try:
+        #     self.notifier.notify(f"Bot error: {context.error}")
+        # except Exception:
+        #     logger.error("Failed to send notification on error")
+        try:
+            await self.notifier.notify(f"Bot error: {context.error}")
+        except Exception:
+            logger.error("Failed to send notification on error")
 
     # ------------------------------------------------------------------
     def run(self):
         logger.info("Starting Telegram polling …")
-        self.app.run_polling()
+        try:
+            self.app.run_polling()
+        finally:
+            # Notify when bot stops
+            try:
+                asyncio.run(self.notifier.notify("Trading bot has stopped."))
+            except Exception:
+                logger.error("Failed to send shutdown notification")

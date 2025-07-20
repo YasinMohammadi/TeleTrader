@@ -1,28 +1,28 @@
 # tradebot/infrastructure/_mt5_utils.py
 import MetaTrader5 as mt5
 from loguru import logger
-from config import settings
 
-def ensure_mt5():
+def ensure_mt5(path: str):
+    """
+    Ensure MT5 is initialized for a specific terminal path.
+    Shuts down and re-initializes if the path changes.
+    """
 
-    """Init & login once; subsequent calls are no-ops."""
+    term_info = mt5.terminal_info()
+    if term_info and term_info.path == path:
+        # Already initialized with the correct path
+        logger.info(f"MT5 already initialized with terminal at {path}. No re-initialization needed.")
+        return
 
-    if not mt5.initialize(settings.mt5_path):
-        logger.info("Couldn't Initailize MT5 Terminal")
+    if term_info:
+        logger.info(f"Switching MT5 terminal from {term_info.path} to {path}")
         mt5.shutdown()
-        raise RuntimeError(mt5.last_error())
 
-    account = settings.mt_account
-    if mt5.account_info() and mt5.account_info().login == account:
-        logger.info(f"MT5  already logged in (account {account}). No login attempt.")
-        return  
+    if not mt5.initialize(path=path):
+        logger.error(f"Couldn't initialize MT5 Terminal at path: {path}")
+        raise RuntimeError(f"MT5 initialization failed: {mt5.last_error()}")
 
-    if not mt5.login(login=account,
-                        password=settings.mt_password,
-                        server=settings.mt_server):
-        raise RuntimeError(f"MT5 login failed: {mt5.last_error()}")
+    logger.info(f"MT5 initialized with terminal at {path}")
 
-    logger.info(f"MT5 logged in (account {account})")
 
-    
-   
+

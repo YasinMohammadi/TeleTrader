@@ -4,108 +4,44 @@ from tradebot.application.parser import BasicSignalParser
 SAMPLES = [  # text, symbol, side, order_type, entry, stop_loss, targets, comment
     (
         """
-        ⚜️ XAUUSD - BUY LIMIT
+        🔴 XAUUSD - SELL NOW 🔴
 
-        🛒 Entry : 3322/3319
+        🎯 Entry: 3340.00
 
-        🎯 Targets :
-        3327
-        3333
-        3338
+        Targets:
+        📈 3333.00
+        📈 3328.00
+        📈 3320.00
 
-        🔺 Stoploss : 3313
+        🛑 Stoploss: 3345.00
 
-        💰 @Jasin  Trader:Lily 💰
+        @Zeno | Trader: Lily+AI
         """,
-        "XAUUSD", "buy",  "limit", 3322.00, 3313.00,
-        [3327.0, 3333.0, 3338.0],
-        "Lily"
-    ),
-    (
-        "EURUSD - BUY LIMIT\nEntry : 1.1000\nTargets :\n1.1010\nStoploss : 1.0980",
-        "EURUSD", "buy", "limit", 1.1000, 1.0980,
-        [1.1010],
-        ""
+        "XAUUSD", "sell", "market", 3340.00, 3345.00,
+        [3333.00, 3328.00, 3320.00],
+        "Lily+AI"
     ),
     (
         """
-        ⚜️ XAUUSD - SELL NOW
+        🔴 XAUUSD - SELL NOW 🔴
 
-        🛒 Entry : 3278
+        🎯 Entry: 3338.50
 
-        🎯 Targets :
-        3275
-        3270
-        3260
+        Targets:
+        📈 3334.00
+        📈 3331.00
+        📈 3328.00
+        📈 3325.00
+        📈 3322.00
+        📈 3317.00
 
-        💰 @Jasin Trader: Empire💰
+        🛑 Stoploss: 3347.00
+
+        @Zeno | Trader: Mirbaha
         """,
-        "XAUUSD", "sell", "market", 3278.0, None,
-        [3275.0, 3270.0, 3260.0],
-        "Empire"
-    ),
-    (
-        """
-        ⚜️ XAUUSD - SELL NOW 
-
-        🛒 Entry : 3275-3280 
-
-        🎯 Targets : 
-        3272
-        3270
-        3267
-        3264
-        3250 
-
-        🔺 Stoploss :3290 
-
-        💰 @Jasin Trader: Nemat💰
-        """,
-        "XAUUSD", "sell", "market", 3275.0, 3290.0,
-        [3272.0, 3270.0, 3267.0, 3264.0, 3250.0],
-        "Nemat"
-    ),
-    (
-        """
-        ⚜️ XAUUSD - BUY LIMIT 
-
-        🛒 Entry : 3284 
-
-        🎯 Targets : 
-        3286
-        3288
-        3290
-        3293
-        3295
-        3300
-        3305 
-
-        💰 @Jasin Trader: Nemat💰
-        """,
-        "XAUUSD", "buy", "limit", 3284.0, None,
-        [3286.0, 3288.0, 3290.0, 3293.0, 3295.0, 3300.0, 3305.0],
-        "Nemat"
-    ),
-    (
-        """
-        ⚜️ XAUUSD - SELL NOW
-
-        🛒 Entry : 3224
-
-        🎯 Targets :
-        3220
-        3215
-        3210
-        3205
-        3200
-
-        🔺 Stoploss : 3235**
-
-        💰 @Jasin Trader: Empire💰
-        """,
-        "XAUUSD", "sell", "market", 3224.0, 3235.0,
-        [3220.0, 3215.0, 3210.0, 3205.0, 3200.0],
-        "Empire"
+        "XAUUSD", "sell", "market", 3338.50, 3347.00,
+        [3334.00, 3331.00, 3328.00, 3325.00, 3322.00, 3317.00],
+        "Mirbaha"
     ),
 ]
 

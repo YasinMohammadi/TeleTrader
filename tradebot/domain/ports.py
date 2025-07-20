@@ -21,3 +21,8 @@ class TradingEnginePort(ABC):
     @abstractmethod
     def execute_order(self, order: Order) -> OrderResult: ...
 
+class NotificationPort(ABC):
+    """Port for sending notifications (e.g. on shutdown or errors)."""
+    @abstractmethod
+    async def notify(self, message: str) -> None: ...
+

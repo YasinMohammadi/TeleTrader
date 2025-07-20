@@ -1,4 +1,3 @@
-
 # TeleTrader 
 
 A **Telegram/MetaTrader 5 trading bot** that turns human-readable “signal-channel” messages into fully managed MT5 orders with comprehensive risk management.
@@ -45,7 +44,7 @@ BUY 0.01 XAUUSD -> TP 3230.0 : OK
 | **Entry-point**    | `main.py`                                      | Wires everything together and starts polling.                                                                                   |
 | **Tests**          | `pytest` suite for parser and order-generator. |                                                                                                                                 |
 | **Logging**        | `loguru` with rotation to `tradebot.log`.      |                                                                                                                                 |
-| **Config**         | `pydantic v2` settings loaded from `.env`.     |                                                                                                                                 |
+| **Config**         | `pydantic v2` settings loaded from `.env` and `accounts.json`.     |                                                                                                                                 |
 
 ## Risk Management
 
@@ -68,36 +67,49 @@ conda env create -f environment.yml (not implemented)
 conda activate Jasin-trader 
 
 ```
-### 2. .env configuration
+### 2. Configure accounts
 
-Create a `.env` file in the project root:
+Create an `accounts.json` file in the project root with a list of your MT5 accounts:
+
+```json
+[
+    {
+        "account": 12345678,
+        "password": "your_password",
+        "server": "YourServer-Demo",
+        "path": "C:/Program Files/MetaTrader 5/terminal64.exe"
+    },
+    {
+        "account": 87654321,
+        "password": "another_password",
+        "server": "YourServer-Live",
+        "path": "C:/Program Files/Another Terminal/terminal64.exe"
+    }
+]
+```
+
+### 3. Configure settings
+
+Create a `.env` file in the project root for Telegram and risk settings:
 
 ```ini
 # Telegram
 TELEGRAM_TOKEN=123456:ABC...
 SIGNAL_CHAT_ID=-1001234567890      # channel/group ID you read signals from
 
-# MT5
-MT5_PATH=C:\Program Files\MetaTrader 5\terminal64.exe
-MT_ACCOUNT=12345678
-MT_PASSWORD=demoPass
-MT_SERVER=MetaQuotes-Demo
-
 # Risk / trade settings
 RISK_PER_TRADE=0.01
 MAX_SLIPPAGE=20
 MAGIC_NUMBER=32001
-
 ```
 
-### 3. Launch
+### 4. Launch
 
 ```bash
 python -m main
-
 ```
 
-Keep the MT5 terminal **open and logged-in**.  
+Keep the MT5 terminal(s) **open and logged-in**.  
 Post a formatted signal into your channel - the bot will fill orders in seconds.
 
 ----------
@@ -144,5 +156,5 @@ pytest -q
 -   **Broker engines** - add `TradingEnginePort` implementations for cTrader, Binance, etc.
     
 -   **Monitoring** - plug a watchdog that pings health to a dashboard.
-    
+
 

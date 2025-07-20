@@ -19,8 +19,8 @@ class SymbolResolver:
         full_sym = resolver.resolve("XAUUSD")   # e.g. returns "XAUUSDb"
     """
 
-    def __init__(self):
-        ensure_mt5()
+    def __init__(self, path: str):
+        ensure_mt5(path)
         self._all = [s.name for s in mt5.symbols_get()]
         self._cache: Dict[str, str] = {}
 

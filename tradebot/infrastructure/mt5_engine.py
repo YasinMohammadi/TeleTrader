@@ -6,24 +6,42 @@ from tradebot.domain.models import Order, OrderResult
 from tradebot.domain.ports import TradingEnginePort
 from ._mt5_symbol_resolver import SymbolResolver
 from ._magic import MagicGen
-from config import settings
+from config import settings, MT5Account
 
 from ._mt5_utils import ensure_mt5
 
 class MetaTraderEngine(TradingEnginePort):
     def __init__(self):
-        ensure_mt5()
-        self._resolver = SymbolResolver()
+        pass
 
     # ------------------
-    def execute_order(self, order: Order) -> OrderResult: 
-                
-        symbol_mt = self._resolver.resolve(order.symbol)                            
+    def execute_order(self, order: Order) -> list[OrderResult]:
+        results = []
+        for acc in settings.mt_accounts:
+            try:
+                ensure_mt5(acc.path)
+                if not mt5.login(acc.account, acc.password, acc.server):
+                    logger.warning(f"Login failed for account {acc.account}")
+                    results.append(OrderResult(False, f"Login failed for {acc.account}"))
+                    continue
+
+                logger.info(f"Executing order on account {acc.account}")
+                result = self._execute_for_account(order, acc)
+                results.append(result)
+            except Exception as e:
+                logger.error(f"Error executing order for account {acc.account}: {e}")
+                results.append(OrderResult(False, f"Error for account {acc.account}: {e}"))
+
+        return results
+
+    def _execute_for_account(self, order: Order, acc: MT5Account) -> OrderResult:
+        resolver = SymbolResolver(path=acc.path)
+        symbol_mt = resolver.resolve(order.symbol)
         if not mt5.symbol_select(symbol_mt, True):
             return OrderResult(False, f"cannot select {symbol_mt}")
-        
+
         # ----- lot size from risk pct -----
-        volume = self._calc_volume(order)
+        volume = self._calc_volume(order, symbol_mt)
         if volume <= 0:
             return OrderResult(False, "volume calc returned 0")
 
@@ -85,16 +103,15 @@ class MetaTraderEngine(TradingEnginePort):
         logger.error(f"Order failed: {data} | last_error: {mt5.last_error()}")
         return OrderResult(False, "mt5 error", data=data)
     # ------------------
-    def _current_order_price(self, order: Order) -> float:
+    def _current_order_price(self, order: Order, symbol_mt: str) -> float:
         """
         Returns bid or ask in respect to order 
         """
-        symbol_mt = self._resolver.resolve(order.symbol)
         tick = mt5.symbol_info_tick(symbol_mt)
         if not tick:
             raise RuntimeError(f"No tick for {symbol_mt}")
         return tick.ask if order.side == "buy" else tick.bid
-    
+
     def _current_prices(self, symbol_mt: str) -> tuple[float, float]:
         """
         Returns (bid, ask) price
@@ -103,15 +120,14 @@ class MetaTraderEngine(TradingEnginePort):
         if not tick:
             raise RuntimeError(f"No tick for {symbol_mt}")
         return tick.bid, tick.ask
-    
-    # ------------------------------------------------------------------    
-    def _calc_volume(self, order: Order) -> float:
+
+    # ------------------------------------------------------------------
+    def _calc_volume(self, order: Order, symbol_mt: str) -> float:
         """
         Convert risk (percent of balance) into lots.
         volume = (risk_money) / (monetary_value_per_point * stop_distance_points)
         """
 
-        symbol_mt = self._resolver.resolve(order.symbol)
         acc = mt5.account_info()
         balance = acc.balance if acc else 0
         if balance == 0:
@@ -125,7 +141,7 @@ class MetaTraderEngine(TradingEnginePort):
 
         # Stop distance in points
         if order.sl:
-            stop_distance = abs((order.price or self._current_order_price(order)) - order.sl) / sym_info.point
+            stop_distance = abs((order.price or self._current_order_price(order, symbol_mt)) - order.sl) / sym_info.point
         else:
             stop_distance = 0  
 
