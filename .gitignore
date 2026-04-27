@@ -3,6 +3,8 @@
 notebooks
 tradebot\application\trade_dashboard.py
 accounts.json
+users.db
+.tt_bot.pid
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

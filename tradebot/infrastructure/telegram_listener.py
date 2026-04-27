@@ -1,8 +1,6 @@
 # tradebot/infrastructure/telegram_listener.py
 
 """Telegram gateway that turns raw messages into MT5 orders."""
-import asyncio
-
 from loguru import logger
 from telegram.ext import (
     ApplicationBuilder, ContextTypes, MessageHandler, filters
@@ -17,6 +15,10 @@ from tradebot.domain.ports import (
     NotificationPort,
 )
 from tradebot.domain.models import Order, OrderResult, Signal
+from tradebot.infrastructure.sl_manager import SignalSLManager
+from tradebot.infrastructure.copy_syncer import CopyTradeSyncer
+from tradebot.infrastructure.pending_expirer import PendingOrderExpirer
+from tradebot.infrastructure.db import upsert_trader, is_trader_allowed
 
 
 class TelegramSignalListener:
@@ -27,12 +29,22 @@ class TelegramSignalListener:
             parser: SignalParserPort,
             engine: TradingEnginePort,
             order_generator: OrderPort,
-            notifier: NotificationPort
+            notifier: NotificationPort,
+            sl_manager: SignalSLManager | None = None,
+            copy_syncer: CopyTradeSyncer | None = None,
+            pending_expirer: PendingOrderExpirer | None = None,
+            startup_message: str = "",
+            shutdown_message: str = "",
     ):
         self.parser = parser
         self.engine = engine
         self.generator = order_generator
         self.notifier = notifier
+        self.sl_manager = sl_manager
+        self.copy_syncer = copy_syncer
+        self.pending_expirer = pending_expirer
+        self._startup_msg = startup_message
+        self._shutdown_msg = shutdown_message
 
         self.app = (ApplicationBuilder()
                     .token(settings.telegram_token)
@@ -52,6 +64,20 @@ class TelegramSignalListener:
         if sig is None:
             logger.info("parser returned None")
             return
+
+        trader_name = sig.comment.strip() if sig.comment else ""
+
+        if trader_name:
+            upsert_trader(trader_name)
+            if not is_trader_allowed(trader_name):
+                logger.info(f"Signal from trader '{trader_name}' — not enabled, skipping")
+                return
+        else:
+            logger.info("Signal has no Trader tag — skipping")
+            return
+
+        logger.info(f"Processing signal from trader '{trader_name}': "
+                     f"{sig.side.upper()} {sig.symbol}")
 
         orders: list[Order] = self.generator.generate_orders(sig)
         if not orders:
@@ -89,13 +115,48 @@ class TelegramSignalListener:
             logger.error("Failed to send notification on error")
 
     # ------------------------------------------------------------------
+    async def _post_init(self, application) -> None:
+        """Called by python-telegram-bot after the app is initialized."""
+        await application.bot.delete_webhook(drop_pending_updates=True)
+        try:
+            await application.bot.get_updates(offset=-1, timeout=1)
+        except Exception:
+            pass
+        logger.info("Cleared stale Telegram connection")
+
+        if self._startup_msg:
+            try:
+                await self.notifier.notify(self._startup_msg)
+                logger.info("Startup notification sent")
+            except Exception:
+                logger.warning("Could not send startup notification")
+
+    async def _post_shutdown(self, application) -> None:
+        """Called by python-telegram-bot when the app shuts down."""
+        if self._shutdown_msg:
+            try:
+                await self.notifier.notify(self._shutdown_msg)
+                logger.info("Shutdown notification sent")
+            except Exception:
+                logger.warning("Could not send shutdown notification")
+
+    # ------------------------------------------------------------------
     def run(self):
         logger.info("Starting Telegram polling …")
+        self.app.post_init = self._post_init
+        self.app.post_shutdown = self._post_shutdown
+        if self.sl_manager:
+            self.sl_manager.start()
+        if self.copy_syncer:
+            self.copy_syncer.start()
+        if self.pending_expirer:
+            self.pending_expirer.start()
         try:
-            self.app.run_polling()
+            self.app.run_polling(drop_pending_updates=True)
         finally:
-            # Notify when bot stops
-            try:
-                asyncio.run(self.notifier.notify("Trading bot has stopped."))
-            except Exception:
-                logger.error("Failed to send shutdown notification")
+            if self.pending_expirer:
+                self.pending_expirer.stop()
+            if self.copy_syncer:
+                self.copy_syncer.stop()
+            if self.sl_manager:
+                self.sl_manager.stop()
